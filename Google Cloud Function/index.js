@@ -1,9 +1,11 @@
 'use strict';
 
-const EthCrypto = require('eth-crypto');
-const axios = require("axios");
+const axios = require('axios');
+const crypto = require('crypto');
 
 const TOKEN_VERIFY_URL = "https://iid.googleapis.com/iid/info/";
+const ALGORITHM = 'SHA256';
+const SIGNATURE_FORMAT = 'hex';
 
 var get_package_name = async (token) => {
     var params = {
@@ -43,7 +45,9 @@ exports.auth = (req, res) => {
         var event = req.body;
         console.log('Incoming request with '+JSON.stringify(event));
 
-        if(event.key == undefined || event.key == null || event.key == '' || event.token == undefined || event.token == null || event.token == '') {
+        if(event.key == undefined || event.key == null || event.key == ''
+             || event.token == undefined || event.token == null || event.token == ''
+             || event.package == undefined || event.package == null || event.package == '') {
             console.log(JSON.stringify(response));
             res.status(500).send(response);
             return;
@@ -57,10 +61,7 @@ exports.auth = (req, res) => {
             return;
         }
 
-        var packages = process.env.PACKAGE_NAMES.split(",");
-        var package_pos = packages.indexOf(package_name);
-
-        if(package_pos<0 || package_pos>=packages.length) {
+        if(package_name != event.package) {
             console.log(JSON.stringify(response));
             res.status(500).send(response);
             return;
@@ -68,12 +69,19 @@ exports.auth = (req, res) => {
 
         var privateKey = process.env.PRIVATE_KEY;
 
-        const messageHash = EthCrypto.hash.keccak256(event.key);
+        if(privateKey.indexOf('-----BEGIN RSA PRIVATE KEY-----') < 0)
+            privateKey = '-----BEGIN RSA PRIVATE KEY-----\n'+privateKey;
+        else if(privateKey.indexOf('-----BEGIN RSA PRIVATE KEY-----\n') < 0)
+            privateKey = privateKey.replace('-----BEGIN RSA PRIVATE KEY-----', '-----BEGIN RSA PRIVATE KEY-----\n');
 
-        const signature = EthCrypto.sign(
-            privateKey,
-            messageHash
-        );
+        if(privateKey.indexOf('-----END RSA PRIVATE KEY-----') < 0)
+            privateKey = privateKey+'\n-----END RSA PRIVATE KEY-----';
+        else if(privateKey.indexOf('\n-----END RSA PRIVATE KEY-----') < 0)
+            privateKey = privateKey.replace('-----END RSA PRIVATE KEY-----', '\n-----END RSA PRIVATE KEY-----');
+
+        var sign = crypto.createSign(ALGORITHM);
+        sign.update(event.key);
+        var signature = sign.sign(privateKey, SIGNATURE_FORMAT);
 
         var response = {};
         response["sign"] = signature;

@@ -9,7 +9,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "axios": "^0.18.0",
-    "eth-crypto": "^1.2.7"
+    "axios": "^0.18.0"
   }
 }
