@@ -7,21 +7,27 @@ const TOKEN_VERIFY_URL = "https://iid.googleapis.com/iid/info/";
 const ALGORITHM = 'SHA256';
 const SIGNATURE_FORMAT = 'hex';
 
-var get_package_name = async (token) => {
+var validate = async (token, package_name) => {
+    let app_package_name = package_name.replace(/[.]/g,'_');
+
+    if(process.env[app_package_name] == undefined)
+        return {ok: false, message: 'Firebase id for package name '+package_name+' as '+app_package_name+' not found'};
+
     var params = {
         method: 'GET',
         url: TOKEN_VERIFY_URL+token,
-        headers: {"Authorization": "key="+process.env.AUTHORIZATION_SERVICE_KEY}
+        headers: {"Authorization": "key="+process.env[app_package_name]}
     }
     try {
         var response = await axios.request(params);
-        if(response != undefined && response.data != undefined && response.data.application != undefined)
-            return response.data.application;
+        if(response != undefined && response.data != undefined && response.data.application != undefined) {
+            return {ok: (package_name == response.data.application), api_package_name: response.data.application};
+        }
     } catch(error) {
-        console.log(error);
+        console.log('Api error:',error.message);
     }
 
-    return null;
+    return {ok: false};
 };
 
 exports.auth = (req, res) => {
@@ -53,15 +59,10 @@ exports.auth = (req, res) => {
             return;
         }
 
-        var package_name = await get_package_name(event.token);
+        let validate_result = await validate(event.token, event.package);
 
-        if(package_name == null) {
-            console.log(JSON.stringify(response));
-            res.status(500).send(response);
-            return;
-        }
-
-        if(package_name != event.package) {
+        if(!validate_result.ok) {
+            console.log('validation response',JSON.stringify(validate_result));
             console.log(JSON.stringify(response));
             res.status(500).send(response);
             return;
